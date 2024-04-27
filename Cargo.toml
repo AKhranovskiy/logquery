@@ -1,0 +1,19 @@
+[workspace]
+members = ["monitor"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+authors = ["Andrey Khranovsky <andrey.khranovsky@gmail.com>"]
+version = "0.1.0"
+name = "logquery"
+
+[workspace.lints.clippy]
+all = "warn"
+complexity = "warn"
+correctness = "warn"
+nursery = "warn"
+pedantic = "warn"
+perf = "warn"
+style = "warn"
+suspicious = "warn"
