@@ -17,3 +17,10 @@ pedantic = "warn"
 perf = "warn"
 style = "warn"
 suspicious = "warn"
+missing-errors-doc = "allow"
+missing-panics-doc = "allow"
+
+[workspace.dependencies]
+futures = "0.3.30"
+notify = "6.1.1"
+tempfile = "3.3.0"
