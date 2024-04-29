@@ -1,4 +1,10 @@
-use std::{borrow::Cow, collections::HashMap, ffi::OsStr, path::Path};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    ffi::OsStr,
+    fmt::{Display, Write},
+    path::Path,
+};
 
 use itertools::Itertools;
 use time::OffsetDateTime;
@@ -50,6 +56,7 @@ impl Repository {
             .collect_vec()
     }
 
+    #[allow(dead_code)]
     pub fn content(&self, file: &str) -> &[String] {
         static EMPTY: Vec<String> = vec![];
         self.lines.get(file).unwrap_or(&EMPTY)
@@ -69,15 +76,32 @@ pub struct FileInfo {
     pub number_of_lines: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileInfoSortKey {
     Name,
     LastUpdate,
     LineCount,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortDirection {
     Ascending,
     Descending,
+}
+
+impl From<SortDirection> for char {
+    fn from(direction: SortDirection) -> Self {
+        match direction {
+            SortDirection::Ascending => '▼',
+            SortDirection::Descending => '▲',
+        }
+    }
+}
+
+impl Display for SortDirection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_char(char::from(*self))
+    }
 }
 
 pub trait FileInfoListExt {
