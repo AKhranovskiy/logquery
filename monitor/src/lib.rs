@@ -76,6 +76,10 @@ impl Monitor {
     pub async fn wait_for_next_event(&mut self) -> Event {
         self.events.select_next_some().await
     }
+
+    pub fn try_next_event(&mut self) -> Option<Event> {
+        self.events.try_next().unwrap_or(None)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
