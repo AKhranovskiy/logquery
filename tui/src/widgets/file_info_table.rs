@@ -14,11 +14,11 @@ use crate::{
     utils::{self, centered_rect},
 };
 
-pub struct FileList<'a> {
+pub struct FileInfoTable<'a> {
     items: Vec<ListItem<'a>>,
 }
 
-impl<'a> FileList<'a> {
+impl<'a> FileInfoTable<'a> {
     pub fn new(files: &'a [FileInfo]) -> Self {
         let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
         let items = files
@@ -46,12 +46,12 @@ impl<'a> FileList<'a> {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
-pub struct FileListState {
+pub struct FileInfoTableState {
     list_state: ListState,
 }
 
-impl<'a> StatefulWidget for FileList<'a> {
-    type State = FileListState;
+impl<'a> StatefulWidget for FileInfoTable<'a> {
+    type State = FileInfoTableState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         state.list_state.select(0.into());

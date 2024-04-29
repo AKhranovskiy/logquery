@@ -15,11 +15,11 @@ use ratatui::prelude::{CrosstermBackend, Terminal};
 use monitor::Monitor;
 
 mod repository;
-mod ui;
 mod utils;
+mod widgets;
 
 use repository::{FileInfoListExt, Repository, SortDirection};
-use ui::{FileList, FileListState};
+use widgets::{FileInfoTable, FileInfoTableState};
 
 fn main() -> Result<()> {
     let Some(target_dir) = args()
@@ -48,7 +48,7 @@ fn main() -> Result<()> {
     let mut repo = Repository::new();
     let mut monitor = Monitor::create(&target_dir).unwrap();
 
-    let mut file_list_state = FileListState::default();
+    let mut file_list_state = FileInfoTableState::default();
 
     loop {
         while let Some(event) = monitor.try_next_event() {
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
             SortDirection::Descending,
         );
 
-        let file_list_widget = FileList::new(&file_info_list);
+        let file_list_widget = FileInfoTable::new(&file_info_list);
 
         terminal.draw(|frame| {
             frame.render_stateful_widget(file_list_widget, frame.size(), &mut file_list_state);
