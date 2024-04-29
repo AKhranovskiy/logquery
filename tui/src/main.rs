@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     env::{args, current_exe},
     ffi::OsStr,
     io::{stdout, Result},
@@ -11,13 +10,16 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
-use itertools::Itertools;
-use monitor::{EventKind, Monitor};
-use ratatui::{
-    prelude::{CrosstermBackend, Stylize, Terminal},
-    style::Style,
-    widgets::{List, ListState},
-};
+use ratatui::prelude::{CrosstermBackend, Terminal};
+
+use monitor::Monitor;
+
+mod repository;
+mod ui;
+mod utils;
+
+use repository::{FileInfoListExt, Repository, SortDirection};
+use ui::{FileList, FileListState};
 
 fn main() -> Result<()> {
     let Some(target_dir) = args()
@@ -43,72 +45,25 @@ fn main() -> Result<()> {
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     terminal.clear()?;
 
+    let mut repo = Repository::new();
     let mut monitor = Monitor::create(&target_dir).unwrap();
-    let mut events: HashMap<String, Vec<EventKind>> = HashMap::new();
-    // let mut updated_tabs: HashSet<&str> = HashSet::new();
-    // let mut selected_tab: Option<&str> = None;
+
+    let mut file_list_state = FileListState::default();
 
     loop {
         while let Some(event) = monitor.try_next_event() {
-            let label = event
-                .path
-                .file_stem()
-                .unwrap()
-                .to_string_lossy()
-                .to_string();
-            events.entry(label).or_default().push(event.kind);
+            repo.update(event);
         }
 
-        let labels = events.keys().map(String::as_str).sorted().collect_vec();
+        let file_info_list = repo.list().sort(
+            repository::FileInfoSortKey::LastUpdate,
+            SortDirection::Descending,
+        );
 
-        let mut tab_state = ListState::default().with_selected(0.into());
-        let tabs = List::new(labels)
-            .highlight_spacing(ratatui::widgets::HighlightSpacing::Always)
-            .highlight_style(Style::default().bold());
-        // let mut lines = vec![];
-        // for (now, event) in &events {
-        //     match &event.kind {
-        //         EventKind::Created => {
-        //             lines.push(Line::from(vec![
-        //                 Span::styled(now.to_string(), Style::default().bold()),
-        //                 Span::raw("\t"),
-        //                 Span::styled(event.path.display().to_string(), Style::default().bold()),
-        //                 Span::raw("\t"),
-        //                 Span::styled("CREATED", Style::default().green()),
-        //             ]));
-        //         }
-        //         EventKind::NewLine(line) => {
-        //             lines.push(Line::from(vec![
-        //                 Span::styled(now.to_string(), Style::default().bold()),
-        //                 Span::raw("\t"),
-        //                 Span::styled(event.path.display().to_string(), Style::default().bold()),
-        //                 Span::raw("\t"),
-        //                 Span::raw(line.get(..45).unwrap_or_default()),
-        //             ]));
-        //         }
-        //         EventKind::Removed => {
-        //             lines.push(Line::from(vec![
-        //                 Span::styled(now.to_string(), Style::default().bold()),
-        //                 Span::raw("\t"),
-        //                 Span::styled(event.path.display().to_string(), Style::default().bold()),
-        //                 Span::raw("\t"),
-        //                 Span::styled("REMOVED", Style::default().red()),
-        //             ]));
-        //         }
-        //     }
-        // }
-
-        // let text = Text::from(lines);
-        // let p = Paragraph::new(text).scroll((
-        //     events
-        //         .len()
-        //         .saturating_sub(terminal.get_frame().size().height as usize) as u16,
-        //     0,
-        // ));
+        let file_list_widget = FileList::new(&file_info_list);
 
         terminal.draw(|frame| {
-            let area = frame.size();
-            frame.render_stateful_widget(tabs, area, &mut tab_state);
+            frame.render_stateful_widget(file_list_widget, frame.size(), &mut file_list_state);
         })?;
 
         if event::poll(std::time::Duration::from_millis(16))? {
