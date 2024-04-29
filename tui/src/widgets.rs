@@ -1,3 +1,3 @@
-mod file_info_table;
+mod file_browser;
 
-pub use file_info_table::FileInfoTable;
+pub use file_browser::{FileBrowser, FileBrowserState};

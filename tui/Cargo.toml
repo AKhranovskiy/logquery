@@ -4,14 +4,13 @@ edition = { workspace = true }
 authors = { workspace = true }
 version = { workspace = true }
 
-
 [dependencies]
-monitor = { workspace = true }
-futures = { workspace = true }
-time = { workspace = true }
 crossterm = { workspace = true }
-ratatui = { workspace = true }
+futures = { workspace = true }
 itertools = { workspace = true }
+monitor = { workspace = true }
+ratatui = { workspace = true }
+time = { workspace = true }
 
 [lints]
 workspace = true

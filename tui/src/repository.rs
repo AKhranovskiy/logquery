@@ -1,10 +1,4 @@
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    ffi::OsStr,
-    fmt::{Display, Write},
-    path::Path,
-};
+use std::{borrow::Cow, collections::HashMap, ffi::OsStr, path::Path};
 
 use itertools::Itertools;
 use time::OffsetDateTime;
@@ -70,61 +64,9 @@ fn file_name(path: &Path) -> String {
         .map_or_else(|| "UKNOWN".to_string(), Cow::to_string)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FileInfo {
     pub name: String,
     pub last_update: OffsetDateTime,
     pub number_of_lines: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileInfoSortKey {
-    Name,
-    LastUpdate,
-    LineCount,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SortDirection {
-    Ascending,
-    Descending,
-}
-
-impl From<SortDirection> for char {
-    fn from(direction: SortDirection) -> Self {
-        match direction {
-            SortDirection::Ascending => '▼',
-            SortDirection::Descending => '▲',
-        }
-    }
-}
-
-impl Display for SortDirection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_char(char::from(*self))
-    }
-}
-
-pub trait FileInfoListExt {
-    fn sort(self, key: FileInfoSortKey, direction: SortDirection) -> Self;
-}
-
-impl FileInfoListExt for Vec<FileInfo> {
-    fn sort(self, key: FileInfoSortKey, direction: SortDirection) -> Self {
-        let cmp = match key {
-            FileInfoSortKey::Name => |a: &FileInfo, b: &FileInfo| a.name.cmp(&b.name),
-            FileInfoSortKey::LastUpdate => {
-                |a: &FileInfo, b: &FileInfo| a.last_update.cmp(&b.last_update)
-            }
-            FileInfoSortKey::LineCount => {
-                |a: &FileInfo, b: &FileInfo| a.number_of_lines.cmp(&b.number_of_lines)
-            }
-        };
-
-        let sorted = self.into_iter().sorted_by(cmp);
-
-        match direction {
-            SortDirection::Ascending => sorted.collect(),
-            SortDirection::Descending => sorted.rev().collect(),
-        }
-    }
 }
