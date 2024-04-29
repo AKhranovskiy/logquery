@@ -8,6 +8,7 @@ authors = { workspace = true }
 workspace = true
 
 [dependencies]
+enum-as-inner = { workspace = true }
 futures = { workspace = true }
 notify = { workspace = true }
 

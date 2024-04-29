@@ -6,7 +6,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
+use enum_as_inner::EnumAsInner;
+use futures::{
+    channel::mpsc::{UnboundedReceiver, UnboundedSender},
+    StreamExt,
+};
 use notify::Watcher;
 
 pub struct Monitor {
@@ -23,8 +27,13 @@ impl Monitor {
         // TODO bound
         let (tx, rx) = futures::channel::mpsc::unbounded();
 
-        // Note: must live outside of the watcher.
         let files: Arc<Mutex<HashMap<PathBuf, File>>> = <_>::default();
+
+        // Reading existing files. It is potentially dangerous if the directory contains large files.
+        {
+            let mut lock = files.lock().unwrap();
+            read_dir_content(path, &mut lock, &tx)?;
+        }
 
         let handler = move |res: Result<notify::Event, notify::Error>| match res {
             Ok(ev) => {
@@ -69,7 +78,7 @@ impl Monitor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum EventKind {
     Created,
     NewLine(String),
@@ -166,4 +175,41 @@ fn event_handler(
         }
         kind => Err(format!("Unsupported event kind {kind:?}").into()),
     }
+}
+
+fn read_dir_content<P>(
+    path: &P,
+    files: &mut HashMap<PathBuf, File>,
+    tx: &UnboundedSender<Event>,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    P: AsRef<Path>,
+{
+    if !path.as_ref().is_dir() {
+        return Err(format!("Not a directory: {}", path.as_ref().display()).into());
+    }
+
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            let Ok(mut file) = File::open(&path) else {
+                eprintln!("Failed to open file {}", path.display());
+                continue;
+            };
+            let mut buf = vec![];
+            file.read_to_end(&mut buf)?;
+            for line in buf.lines() {
+                if let Err(error) = tx.unbounded_send(Event {
+                    path: path.clone(),
+                    kind: EventKind::NewLine(line?),
+                }) {
+                    eprintln!("Failed to send event for {}: {error}", path.display());
+                }
+            }
+            files.insert(path, file);
+        }
+    }
+
+    Ok(())
 }
