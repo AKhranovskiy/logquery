@@ -192,7 +192,7 @@ where
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() {
+        if path.is_file() && path.extension() == Some("log".as_ref()) {
             let Ok(mut file) = File::open(&path) else {
                 eprintln!("Failed to open file {}", path.display());
                 continue;

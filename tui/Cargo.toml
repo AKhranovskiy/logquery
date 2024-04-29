@@ -1,0 +1,14 @@
+[package]
+name = "logquiry-tui"
+edition = { workspace = true }
+authors = { workspace = true }
+version = { workspace = true }
+
+
+[dependencies]
+monitor = { workspace = true }
+futures = { workspace = true }
+time = { workspace = true }
+
+[lints]
+workspace = true
