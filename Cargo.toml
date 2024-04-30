@@ -34,5 +34,11 @@ time = { version = "0.3.36", features = [
     "formatting",
 ] }
 itertools = "0.12.1"
+tokio = { version = "1.37.0", features = ["full"] }
+dashmap = "5.5.3"
+tracing = "0.1.40"
+thiserror = "1.0.59"
+color-eyre = "0.6.3"
+tap = "1.0.1"
 
 monitor = { path = "./monitor" }

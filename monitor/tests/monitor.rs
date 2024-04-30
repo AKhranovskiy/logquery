@@ -1,5 +1,7 @@
 use std::io::Write;
 
+use monitor::EventKind;
+
 #[test]
 pub fn test_monitor_new_files() {
     let temp_dir = tempfile::tempdir().unwrap();
@@ -18,22 +20,13 @@ pub fn test_monitor_new_files() {
     temp_file_a.write_all(b"Ghost line").unwrap();
     drop(temp_file_a);
 
-    futures::executor::block_on(async {
-        assert!(m.wait_for_next_event().await.kind == monitor::EventKind::Created);
-        assert!(
-            m.wait_for_next_event().await.kind
-                == monitor::EventKind::NewLine("First line".to_string())
-        );
-        assert!(
-            m.wait_for_next_event().await.kind
-                == monitor::EventKind::NewLine("Second line".to_string())
-        );
-        assert!(
-            m.wait_for_next_event().await.kind
-                == monitor::EventKind::NewLine("Third line".to_string())
-        );
-        assert!(m.wait_for_next_event().await.kind == monitor::EventKind::Removed);
-    });
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Created);
+    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Modified);
+    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Modified);
+    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Modified);
+    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Removed);
 }
 
 #[test]
@@ -50,23 +43,23 @@ pub fn test_monitor_existing_files() {
 
     let mut m = monitor::Monitor::create(&temp_dir).unwrap();
 
-    futures::executor::block_on(async {
-        // Order of files are not guaranteed, but the order of lines is stable.
-        let line_1 = m.wait_for_next_event().await.kind.into_new_line().unwrap();
-        let line_2 = m.wait_for_next_event().await.kind.into_new_line().unwrap();
-        let line_3 = m.wait_for_next_event().await.kind.into_new_line().unwrap();
-        let line_4 = m.wait_for_next_event().await.kind.into_new_line().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
-        if line_1 == "Line A" {
-            assert_eq!(line_2, "Line B");
-            assert_eq!(line_3, "Line C");
-            assert_eq!(line_4, "Line D");
-        } else if line_1 == "Line C" {
-            assert_eq!(line_2, "Line D");
-            assert_eq!(line_3, "Line A");
-            assert_eq!(line_4, "Line B");
-        } else {
-            panic!("Unexpected lines: {line_1}, {line_2}, {line_3}, {line_4}");
-        }
-    });
+    let events = (0..)
+        .filter_map(|_| m.try_next_message())
+        .map(|ev| ev.kind)
+        .take(6)
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        events,
+        [
+            EventKind::Created,
+            EventKind::Modified,
+            EventKind::Modified,
+            EventKind::Created,
+            EventKind::Modified,
+            EventKind::Modified
+        ],
+    );
 }

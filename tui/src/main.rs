@@ -55,7 +55,7 @@ fn main() -> Result<()> {
     let mut file_browser_state = FileBrowserState::new();
 
     loop {
-        while let Some(event) = monitor.try_next_event() {
+        while let Some(event) = monitor.try_next_message() {
             repo.update(event);
         }
         file_browser_state.update(repo.list());
