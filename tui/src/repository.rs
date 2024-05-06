@@ -18,7 +18,7 @@ impl Repository {
         }
     }
 
-    pub fn update(&mut self, event: monitor::Event) {
+    pub fn update(&mut self, event: &monitor::Event) {
         let name = file_name(&event.path);
 
         match event.kind {
@@ -28,8 +28,11 @@ impl Repository {
                 }
                 self.updates.insert(name, utils::now());
             }
-            monitor::EventKind::NewLine(line) => {
-                self.lines.entry(name.clone()).or_default().push(line);
+            monitor::EventKind::Modified => {
+                self.lines
+                    .entry(name.clone())
+                    .or_default()
+                    .push(<_>::default());
                 self.updates.insert(name, utils::now());
             }
             monitor::EventKind::Removed => {

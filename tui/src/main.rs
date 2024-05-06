@@ -56,7 +56,7 @@ fn main() -> Result<()> {
 
     loop {
         while let Some(event) = monitor.try_next_message() {
-            repo.update(event);
+            repo.update(&event);
         }
         file_browser_state.update(repo.list());
 
