@@ -1,21 +1,17 @@
 [package]
-name = "monitor"
-version = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
+version = { workspace = true }
+name = "line-index-reader"
+
+[dependencies]
+enum-as-inner = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true
-
-[dependencies]
-color-eyre = { workspace = true }
-dashmap = { workspace = true }
-enum-as-inner = { workspace = true }
-notify = { workspace = true }
-tap = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true }
-tracing = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
