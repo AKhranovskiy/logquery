@@ -24,7 +24,7 @@ module_name_repetitions = "allow"
 [workspace.dependencies]
 futures = "0.3.30"
 notify = "6.1.1"
-tempfile = "3.6.0"
+tempfile = "3.10.1"
 enum-as-inner = "0.6.0"
 ratatui = "0.26.2"
 crossterm = "0.27.0"
