@@ -25,18 +25,18 @@ futures = "0.3.30"
 notify = "6.1.1"
 tempfile = "3.10.1"
 enum-as-inner = "0.6.0"
-ratatui = "0.26.2"
+ratatui = "0.26.3"
 crossterm = "0.27.0"
 time = { version = "0.3.36", features = [
     "local-offset",
     "macros",
     "formatting",
 ] }
-itertools = "0.12.1"
+itertools = "0.13.0"
 tokio = { version = "1.37.0", features = ["full"] }
 dashmap = "5.5.3"
 tracing = "0.1.40"
-thiserror = "1.0.59"
+thiserror = "1.0.61"
 color-eyre = "0.6.3"
 tap = "1.0.1"
 rstest = "0.19.0"

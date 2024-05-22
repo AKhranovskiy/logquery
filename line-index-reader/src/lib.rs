@@ -186,7 +186,7 @@ async fn read_lines(
         .map_err(Into::into)
 }
 
-fn index_lines(file: tokio::fs::File) -> Result<(tokio::fs::File, std::vec::Vec<u64>), Error> {
+fn index_lines(file: File) -> Result<(File, Vec<u64>), Error> {
     let mut file = file.try_into_std().unwrap();
 
     let mut offsets = vec![];

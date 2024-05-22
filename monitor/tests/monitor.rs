@@ -21,11 +21,11 @@ pub fn test_monitor_new_files() {
 
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Created);
-    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Modified);
-    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Modified);
-    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Modified);
-    assert!(m.try_next_message().unwrap().kind == monitor::EventKind::Removed);
+    assert_eq!(m.try_next_message().unwrap().kind, EventKind::Created);
+    assert_eq!(m.try_next_message().unwrap().kind, EventKind::Modified);
+    assert_eq!(m.try_next_message().unwrap().kind, EventKind::Modified);
+    assert_eq!(m.try_next_message().unwrap().kind, EventKind::Modified);
+    assert_eq!(m.try_next_message().unwrap().kind, EventKind::Removed);
 }
 
 #[test]

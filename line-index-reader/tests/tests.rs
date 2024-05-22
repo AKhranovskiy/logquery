@@ -1,7 +1,8 @@
 use std::{io::Write, ops::RangeBounds};
 
-use line_index_reader::LineIndexReader;
 use tempfile::NamedTempFile;
+
+use line_index_reader::LineIndexReader;
 
 #[rstest::rstest]
 #[case::empty(empty(), 0)]
@@ -109,7 +110,7 @@ pub async fn consistency_on_truncated() {
             .await
             .expect("Index consistency")
             .into_inconsistent()
-            .expect("Inconsitent index")
+            .expect("Inconsistent index")
     );
 }
 
@@ -136,8 +137,8 @@ const SMALL_FILE_LINES: usize = 9_565;
 // 11 bytes per line, so over 100K lines
 const LARGE_FILE_LINES: usize = 123_456;
 
-fn temp_file(lines: usize) -> tempfile::NamedTempFile {
-    let mut f = tempfile::NamedTempFile::new().unwrap();
+fn temp_file(lines: usize) -> NamedTempFile {
+    let mut f = NamedTempFile::new().unwrap();
     for i in 0..lines {
         writeln!(f, "Line {i:06}").unwrap();
     }
@@ -148,14 +149,14 @@ fn temp_file(lines: usize) -> tempfile::NamedTempFile {
 
 #[rstest::fixture]
 #[once]
-fn empty() -> tempfile::NamedTempFile {
-    tempfile::NamedTempFile::new().unwrap()
+fn empty() -> NamedTempFile {
+    NamedTempFile::new().unwrap()
 }
 
 #[rstest::fixture]
 #[once]
-fn one_line_eol() -> tempfile::NamedTempFile {
-    let mut f = tempfile::NamedTempFile::new().unwrap();
+fn one_line_eol() -> NamedTempFile {
+    let mut f = NamedTempFile::new().unwrap();
     writeln!(f, "Line 000000").unwrap();
     f.flush().unwrap();
     f
@@ -163,8 +164,8 @@ fn one_line_eol() -> tempfile::NamedTempFile {
 
 #[rstest::fixture]
 #[once]
-fn one_line() -> tempfile::NamedTempFile {
-    let mut f = tempfile::NamedTempFile::new().unwrap();
+fn one_line() -> NamedTempFile {
+    let mut f = NamedTempFile::new().unwrap();
     write!(f, "Line 000000").unwrap();
     f.flush().unwrap();
     f
@@ -172,8 +173,8 @@ fn one_line() -> tempfile::NamedTempFile {
 
 #[rstest::fixture]
 #[once]
-fn small_file_eol() -> tempfile::NamedTempFile {
-    let mut f = tempfile::NamedTempFile::new().unwrap();
+fn small_file_eol() -> NamedTempFile {
+    let mut f = NamedTempFile::new().unwrap();
     for i in 0..SMALL_FILE_LINES {
         writeln!(f, "Line {i:06}").unwrap();
     }
@@ -183,8 +184,8 @@ fn small_file_eol() -> tempfile::NamedTempFile {
 
 #[rstest::fixture]
 #[once]
-fn small_file() -> tempfile::NamedTempFile {
-    let mut f = tempfile::NamedTempFile::new().unwrap();
+fn small_file() -> NamedTempFile {
+    let mut f = NamedTempFile::new().unwrap();
     for i in 0..SMALL_FILE_LINES - 1 {
         writeln!(f, "Line {i:06}").unwrap();
     }
@@ -195,8 +196,8 @@ fn small_file() -> tempfile::NamedTempFile {
 
 #[rstest::fixture]
 #[once]
-fn large_with_eof() -> tempfile::NamedTempFile {
-    let mut f = tempfile::NamedTempFile::new().unwrap();
+fn large_with_eof() -> NamedTempFile {
+    let mut f = NamedTempFile::new().unwrap();
     for i in 0..LARGE_FILE_LINES {
         writeln!(f, "Line {i:06}").unwrap();
     }
