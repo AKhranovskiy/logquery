@@ -32,7 +32,7 @@ impl Repository {
                 self.lines
                     .entry(name.clone())
                     .or_default()
-                    .push(<_>::default());
+                    .push(String::new());
                 self.updates.insert(name, utils::now());
             }
             monitor::EventKind::Removed => {
@@ -64,7 +64,7 @@ fn file_name(path: &Path) -> String {
     path.file_stem()
         .map(OsStr::to_string_lossy)
         .as_ref()
-        .map_or_else(|| "UKNOWN".to_string(), Cow::to_string)
+        .map_or_else(|| "UNKNOWN".to_string(), Cow::to_string)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

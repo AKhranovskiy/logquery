@@ -46,8 +46,16 @@ pub fn test_monitor_existing_files() {
     let events = (0..)
         .filter_map(|_| m.try_next_message())
         .map(|ev| ev.kind)
-        .take(2)
+        .take(4)
         .collect::<Vec<_>>();
 
-    assert_eq!(events, [EventKind::Modified, EventKind::Modified],);
+    assert_eq!(
+        events,
+        [
+            EventKind::Created,
+            EventKind::Created,
+            EventKind::Modified,
+            EventKind::Modified
+        ],
+    );
 }

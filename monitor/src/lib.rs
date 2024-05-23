@@ -110,7 +110,6 @@ where
             res.map(|entry| entry.map(|entry| entry.path()))
                 .filter_map(Result::ok)
                 .filter(|path| path.is_file())
-                .filter(|path| path.extension() == Some("log".as_ref()))
                 .map(|path| Event {
                     path,
                     kind: EventKind::Created,

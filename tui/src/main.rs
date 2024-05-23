@@ -21,9 +21,9 @@ mod repository;
 mod utils;
 mod widgets;
 
-use repository::Repository;
-use utils::centered_rect;
-use widgets::{FileBrowser, FileBrowserState};
+use crate::repository::Repository;
+use crate::utils::centered_rect;
+use crate::widgets::{FileBrowser, FileBrowserState};
 
 fn main() -> Result<()> {
     let Some(target_dir) = args()
@@ -73,7 +73,7 @@ fn main() -> Result<()> {
 
         if event::poll(std::time::Duration::from_millis(16))? {
             if let event::Event::Key(key) = event::read()? {
-                // TODO how to pass hanbdling result to file view?
+                // TODO how to pass handling result to file view?
                 file_browser_state.handle_key_event(&key);
 
                 if (key.kind, key.code) == (KeyEventKind::Press, KeyCode::Char('q')) {

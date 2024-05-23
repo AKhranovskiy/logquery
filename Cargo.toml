@@ -8,14 +8,14 @@ authors = ["Andrey Khranovsky <andrey.khranovsky@gmail.com>"]
 version = "0.1.0"
 
 [workspace.lints.clippy]
-all = "warn"
-complexity = "warn"
-correctness = "warn"
-nursery = "warn"
-pedantic = "warn"
-perf = "warn"
-style = "warn"
-suspicious = "warn"
+all = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
 missing-errors-doc = "allow"
 missing-panics-doc = "allow"
 module_name_repetitions = "allow"
@@ -42,3 +42,4 @@ tap = "1.0.1"
 rstest = "0.19.0"
 
 monitor = { path = "./monitor" }
+line-index-reader = { path = "./line-index-reader" }
