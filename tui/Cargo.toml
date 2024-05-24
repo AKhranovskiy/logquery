@@ -6,11 +6,17 @@ version = { workspace = true }
 
 [dependencies]
 crossterm = { workspace = true }
+dashmap = { workspace = true }
+enum-as-inner = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-monitor = { workspace = true }
 ratatui = { workspace = true }
 time = { workspace = true }
+tokio = { workspace = true }
+
+# Workspace crates
+line-index-reader = { workspace = true }
+monitor = { workspace = true }
 
 [lints]
 workspace = true

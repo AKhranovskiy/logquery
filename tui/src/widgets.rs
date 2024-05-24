@@ -1,3 +1,3 @@
-mod file_browser;
+mod file_list;
 
-pub use file_browser::{FileBrowser, FileBrowserState};
+pub use file_list::{FileList, FileListAction, FileListState};

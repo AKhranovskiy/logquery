@@ -1,90 +1,65 @@
 use std::{
     env::{args, current_exe},
     ffi::OsStr,
-    io::{stdout, Result},
+    io::{stdout, Result, Stdout},
     path::{Path, PathBuf},
 };
 
 use crossterm::{
-    event::{self, KeyCode, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
-use ratatui::{
-    prelude::{CrosstermBackend, Terminal},
-    widgets::Paragraph,
-};
+use ratatui::prelude::{CrosstermBackend, Terminal};
 
-use monitor::Monitor;
-
+mod app;
 mod repository;
 mod utils;
 mod widgets;
 
-use crate::repository::Repository;
-use crate::utils::centered_rect;
-use crate::widgets::{FileBrowser, FileBrowserState};
+use crate::app::App;
 
 fn main() -> Result<()> {
-    let Some(target_dir) = args()
-        .nth(1)
-        .map(PathBuf::from)
-        .filter(|p| p.exists())
-        .filter(|p| p.is_dir())
-    else {
-        eprintln!(
-            "Usage: {} <target-dir>",
-            current_exe()
-                .ok()
-                .as_deref()
-                .and_then(Path::file_name)
-                .and_then(OsStr::to_str)
-                .unwrap_or("<app>")
-        );
+    let Some(target_dir) = target_dir_from_args() else {
+        print_usage();
         return Ok(());
     };
 
+    with_terminal(|terminal| App::run(terminal, &target_dir))
+}
+
+fn with_terminal<F>(f: F) -> Result<()>
+where
+    F: FnOnce(&mut Terminal<CrosstermBackend<Stdout>>) -> Result<()>,
+{
     stdout().execute(EnterAlternateScreen)?;
     enable_raw_mode()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     terminal.clear()?;
 
-    let mut repo = Repository::new();
-    let mut monitor = Monitor::create(&target_dir).unwrap();
-
-    let mut file_browser_state = FileBrowserState::new();
-
-    loop {
-        while let Some(event) = monitor.try_next_message() {
-            repo.update(&event);
-        }
-        file_browser_state.update(repo.list());
-
-        terminal.draw(|frame| {
-            if file_browser_state.is_visible() {
-                frame.render_stateful_widget(FileBrowser {}, frame.size(), &mut file_browser_state);
-            } else {
-                frame.render_widget(
-                    Paragraph::new("Press 'o' to open the file browser"),
-                    centered_rect(frame.size(), 10, 10),
-                );
-            }
-        })?;
-
-        if event::poll(std::time::Duration::from_millis(16))? {
-            if let event::Event::Key(key) = event::read()? {
-                // TODO how to pass handling result to file view?
-                file_browser_state.handle_key_event(&key);
-
-                if (key.kind, key.code) == (KeyEventKind::Press, KeyCode::Char('q')) {
-                    break;
-                }
-            }
-        }
-    }
+    let result = f(&mut terminal);
 
     stdout().execute(LeaveAlternateScreen)?;
     disable_raw_mode()?;
 
-    Ok(())
+    result
+}
+
+fn target_dir_from_args() -> Option<PathBuf> {
+    args()
+        .nth(1)
+        .map(PathBuf::from)
+        .filter(|p| p.exists())
+        .filter(|p| p.is_dir())
+}
+
+fn print_usage() {
+    eprintln!(
+        "Usage: {} <target-dir>",
+        current_exe()
+            .ok()
+            .as_deref()
+            .and_then(Path::file_name)
+            .and_then(OsStr::to_str)
+            .unwrap_or("<app>")
+    );
 }

@@ -4,13 +4,13 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use itertools::Itertools;
 use ratatui::{
     layout::Constraint,
     prelude::{Buffer, Rect},
     style::{Style, Stylize},
-    text::Text,
+    text::{Line, Text},
     widgets::{Block, Borders, HighlightSpacing, Row, StatefulWidget, Table, TableState},
 };
 use time::macros::format_description;
@@ -33,19 +33,31 @@ const TITLE: &str = "File browser";
 const LAST_UPDATE_FORMAT: &[time::format_description::BorrowedFormatItem<'_>] =
     format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
 
-pub struct FileBrowser {}
+#[derive(Debug, Clone, Copy)]
+pub struct FileList {}
 
 #[derive(Debug, Clone)]
-pub struct FileBrowserState {
+pub struct FileListState {
     hash: u64,
     sorted_list: Vec<FileInfo>,
     sort_column: SortColumn,
     sort_direction: SortDirection,
     table_state: TableState,
-    visible: bool,
 }
 
-impl FileBrowserState {
+#[allow(dead_code)]
+#[derive(Debug)]
+pub enum FileListAction {
+    None,
+    /// Open in the new tab
+    OpenNewTab(FileInfo),
+    /// Try to split the current tab, otherwise open in the new tab.
+    SplitCurrentTab(FileInfo),
+    /// Try to merge into the current tab, otherwise open in the new tab
+    MergeIntoCurrentTab(FileInfo),
+}
+
+impl FileListState {
     pub fn new() -> Self {
         let hash = {
             let mut h = DefaultHasher::new();
@@ -59,107 +71,97 @@ impl FileBrowserState {
             sort_column: SortColumn::Name,
             sort_direction: SortDirection::Ascending,
             table_state: TableState::default(),
-            visible: true,
         }
     }
 
-    #[allow(unreachable_code)]
-    pub fn handle_key_event(&mut self, event: &KeyEvent) {
-        if self.visible {
-            match (event.kind, event.code) {
-                // File list table sorting
-                (KeyEventKind::Press, KeyCode::Char('n')) => {
-                    self.sort_column = SortColumn::Name;
-                    self.sort_direction = SortDirection::Ascending;
-                }
-                (KeyEventKind::Press, KeyCode::Char('N')) => {
-                    self.sort_column = SortColumn::Name;
-                    self.sort_direction = SortDirection::Descending;
-                }
-                (KeyEventKind::Press, KeyCode::Char('l')) => {
-                    self.sort_column = SortColumn::LineCount;
-                    self.sort_direction = SortDirection::Ascending;
-                }
-                (KeyEventKind::Press, KeyCode::Char('L')) => {
-                    self.sort_column = SortColumn::LineCount;
-                    self.sort_direction = SortDirection::Descending;
-                }
-                (KeyEventKind::Press, KeyCode::Char('a')) => {
-                    self.sort_column = SortColumn::Age;
-                    self.sort_direction = SortDirection::Ascending;
-                }
-                (KeyEventKind::Press, KeyCode::Char('A')) => {
-                    self.sort_column = SortColumn::Age;
-                    self.sort_direction = SortDirection::Descending;
-                }
-
-                // File list selection
-                (KeyEventKind::Press, KeyCode::Up) => {
-                    self.table_state
-                        .select(self.table_state.selected().map(|v| v.saturating_sub(1)));
-                }
-                (KeyEventKind::Press, KeyCode::Down) => {
-                    self.table_state.select(
-                        self.table_state
-                            .selected()
-                            .map(|v| v.saturating_add(1).min(self.sorted_list.len() - 1)),
-                    );
-                }
-
-                // File list actions
-                (KeyEventKind::Press, KeyCode::Enter) => {
-                    match event.modifiers {
-                        KeyModifiers::SHIFT => {
-                            // Try to split into the current tab, otherwise new tab
-                            unimplemented!("Split into the current tab");
-                        }
-                        KeyModifiers::CONTROL => {
-                            // Try to merge into the current tab, otherwise new tab
-                            unimplemented!("Merge into the current tab");
-                        }
-                        _ => {
-                            unimplemented!("Open tab for selected file");
-                        }
-                    }
-                    self.visible = false;
-                }
-                _ => {}
+    pub fn handle_key_event(&mut self, event: &KeyEvent) -> FileListAction {
+        // Actions for selected file
+        if let Some(selected) = self.selected() {
+            if (KeyEventKind::Press, KeyCode::Enter) == (event.kind, event.code) {
+                return FileListAction::OpenNewTab(selected);
+                // Modifiers do not work here
+                // return match event.modifiers {
+                //     KeyModifiers::SHIFT => FileListAction::SplitCurrentTab(selected),
+                //     KeyModifiers::CONTROL => FileListAction::MergeIntoCurrentTab(selected),
+                //     _ => FileListAction::OpenNewTab(selected),
+                // };
             }
-        } else if (event.kind, event.code) == (KeyEventKind::Press, KeyCode::Char('o')) {
-            self.visible = true;
         }
+
+        match (event.kind, event.code) {
+            // File list table sorting
+            (KeyEventKind::Press, KeyCode::Char('n')) => {
+                self.sort_column = SortColumn::Name;
+                self.sort_direction = SortDirection::Ascending;
+            }
+            (KeyEventKind::Press, KeyCode::Char('N')) => {
+                self.sort_column = SortColumn::Name;
+                self.sort_direction = SortDirection::Descending;
+            }
+            (KeyEventKind::Press, KeyCode::Char('l')) => {
+                self.sort_column = SortColumn::LineCount;
+                self.sort_direction = SortDirection::Ascending;
+            }
+            (KeyEventKind::Press, KeyCode::Char('L')) => {
+                self.sort_column = SortColumn::LineCount;
+                self.sort_direction = SortDirection::Descending;
+            }
+            (KeyEventKind::Press, KeyCode::Char('a')) => {
+                self.sort_column = SortColumn::Age;
+                self.sort_direction = SortDirection::Ascending;
+            }
+            (KeyEventKind::Press, KeyCode::Char('A')) => {
+                self.sort_column = SortColumn::Age;
+                self.sort_direction = SortDirection::Descending;
+            }
+
+            // File list selection
+            (KeyEventKind::Press, KeyCode::Up) => {
+                self.table_state
+                    .select(self.table_state.selected().map(|v| v.saturating_sub(1)));
+            }
+            (KeyEventKind::Press, KeyCode::Down) => {
+                self.table_state.select(
+                    self.table_state
+                        .selected()
+                        .map(|v| v.saturating_add(1).min(self.sorted_list.len() - 1)),
+                );
+            }
+
+            _ => {}
+        }
+
+        FileListAction::None
     }
 
     pub fn update(&mut self, files: Vec<FileInfo>) {
-        if self.visible {
-            let hash = {
-                let mut h = DefaultHasher::new();
-                files.hash(&mut h);
-                h.finish()
-            };
-            if self.hash != hash {
-                self.sorted_list = sort(files, self.sort_column, self.sort_direction);
+        let hash = {
+            let mut h = DefaultHasher::new();
+            files.hash(&mut h);
+            h.finish()
+        };
+        if self.hash != hash {
+            self.sorted_list = sort(files, self.sort_column, self.sort_direction);
 
-                if self.sorted_list.is_empty() {
-                    self.table_state.select(None);
-                } else {
-                    self.table_state.select(
-                        self.table_state
-                            .selected()
-                            .map(|v| v.min(self.sorted_list.len() - 1))
-                            .or(Some(0)),
-                    );
-                }
+            if self.sorted_list.is_empty() {
+                self.table_state.select(None);
+            } else {
+                self.table_state.select(
+                    self.table_state
+                        .selected()
+                        .map(|v| v.min(self.sorted_list.len() - 1))
+                        .or(Some(0)),
+                );
             }
         }
     }
 
-    pub const fn is_visible(&self) -> bool {
-        self.visible
+    fn selected(&self) -> Option<FileInfo> {
+        self.sorted_list.get(self.table_state.selected()?).cloned()
     }
 }
 
-struct Renderer<'state>(&'state FileBrowserState);
+struct Renderer<'state>(&'state FileListState);
 
 impl<'state> Renderer<'state> {
     fn header(&self) -> Row<'state> {
@@ -184,6 +186,7 @@ impl<'state> Renderer<'state> {
             .right_aligned(),
             Text::from(LABELS[3]).left_aligned(),
         ])
+        .bottom_margin(1)
     }
 
     fn rows(&self) -> Vec<Row<'state>> {
@@ -197,7 +200,7 @@ impl<'state> Renderer<'state> {
                 Row::new(vec![
                     Text::from(file.name.clone()).left_aligned(),
                     Text::from(file.number_of_lines.to_string()).right_aligned(),
-                    Text::from(age.to_string()).right_aligned(),
+                    Text::from(Line::from_iter([age.to_string(), "s".into()])).right_aligned(),
                     Text::from(last_update).left_aligned(),
                 ])
             })
@@ -205,10 +208,10 @@ impl<'state> Renderer<'state> {
     }
 }
 
-impl FileBrowser {}
+impl FileList {}
 
-impl StatefulWidget for FileBrowser {
-    type State = FileBrowserState;
+impl StatefulWidget for FileList {
+    type State = FileListState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let renderer = Renderer(state);

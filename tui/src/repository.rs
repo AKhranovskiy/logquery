@@ -1,70 +1,90 @@
-use std::{borrow::Cow, collections::HashMap, ffi::OsStr, path::Path};
+use std::{path::Path, sync::Arc};
 
-use itertools::Itertools;
+use dashmap::{mapref::multiple::RefMulti, DashMap};
 use time::OffsetDateTime;
+use tokio::sync::oneshot::{channel, error::TryRecvError, Sender};
 
-use crate::utils;
+use line_index_reader::LineIndexReader;
+use monitor::Monitor;
+
+use crate::utils::{self, file_name};
+
+struct Entry {
+    reader: LineIndexReader,
+    updated: OffsetDateTime,
+}
 
 pub struct Repository {
-    lines: HashMap<String, Vec<String>>,
-    updates: HashMap<String, OffsetDateTime>,
+    entires: Arc<DashMap<String, Entry>>,
+    #[allow(dead_code)]
+    worker: (Sender<()>, std::thread::JoinHandle<()>),
 }
 
 impl Repository {
-    pub fn new() -> Self {
-        Self {
-            lines: HashMap::new(),
-            updates: HashMap::new(),
-        }
-    }
+    pub fn new(target_dir: &Path) -> Self {
+        let entires = Arc::new(DashMap::new());
+        let entries_clone = Arc::clone(&entires);
 
-    pub fn update(&mut self, event: &monitor::Event) {
-        let name = file_name(&event.path);
+        let (sender, mut receiver) = channel::<()>();
 
-        match event.kind {
-            monitor::EventKind::Created => {
-                if self.lines.insert(name.clone(), vec![]).is_some() {
-                    eprintln!("Replace the file content: {}", event.path.display());
+        let target_dir = target_dir.to_owned();
+        let mut monitor = Monitor::create(&target_dir).unwrap();
+
+        let thread_handle = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
+            loop {
+                match receiver.try_recv() {
+                    Ok(()) | Err(TryRecvError::Closed) => {
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => {}
                 }
-                self.updates.insert(name, utils::now());
+
+                while let Some(event) = monitor.try_next_message() {
+                    let Some(name) = file_name(&event.path) else {
+                        continue;
+                    };
+
+                    match event.kind {
+                        monitor::EventKind::Created => {
+                            if let Ok(reader) = rt.block_on(LineIndexReader::index(&event.path)) {
+                                entries_clone.insert(
+                                    name,
+                                    Entry {
+                                        reader,
+                                        updated: utils::now(),
+                                    },
+                                );
+                            }
+                        }
+                        monitor::EventKind::Modified => {
+                            if let Some(mut entry) = entries_clone.get_mut(&name) {
+                                if rt.block_on(entry.reader.update()).is_ok() {
+                                    entry.updated = utils::now();
+                                }
+                            }
+                        }
+                        monitor::EventKind::Removed => {
+                            entries_clone.remove(&name);
+                        }
+                    }
+                }
             }
-            monitor::EventKind::Modified => {
-                self.lines
-                    .entry(name.clone())
-                    .or_default()
-                    .push(String::new());
-                self.updates.insert(name, utils::now());
-            }
-            monitor::EventKind::Removed => {
-                self.lines.remove(&name);
-                self.updates.remove(&name);
-            }
+        });
+
+        Self {
+            entires,
+            worker: (sender, thread_handle),
         }
     }
 
     pub fn list(&self) -> Vec<FileInfo> {
-        self.lines
-            .iter()
-            .map(|(name, lines)| FileInfo {
-                name: name.clone(),
-                last_update: self.updates.get(name).copied().unwrap_or_else(utils::now),
-                number_of_lines: lines.len(),
-            })
-            .collect_vec()
+        self.entires.iter().map(Into::into).collect()
     }
-
-    #[allow(dead_code)]
-    pub fn content(&self, file: &str) -> &[String] {
-        static EMPTY: Vec<String> = vec![];
-        self.lines.get(file).unwrap_or(&EMPTY)
-    }
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_stem()
-        .map(OsStr::to_string_lossy)
-        .as_ref()
-        .map_or_else(|| "UNKNOWN".to_string(), Cow::to_string)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -72,4 +92,14 @@ pub struct FileInfo {
     pub name: String,
     pub last_update: OffsetDateTime,
     pub number_of_lines: usize,
+}
+
+impl From<RefMulti<'_, String, Entry>> for FileInfo {
+    fn from(entry: RefMulti<String, Entry>) -> Self {
+        Self {
+            name: entry.key().clone(),
+            last_update: entry.value().updated,
+            number_of_lines: entry.value().reader.len(),
+        }
+    }
 }

@@ -1,5 +1,4 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use time::{macros::offset, OffsetDateTime};
 
 /// # Usage
 ///
@@ -26,6 +25,13 @@ pub fn centered_rect(r: Rect, percent_x: u16, percent_y: u16) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-pub fn now() -> OffsetDateTime {
-    OffsetDateTime::now_utc().to_offset(offset!(+07))
+pub fn now() -> time::OffsetDateTime {
+    time::OffsetDateTime::now_utc().to_offset(time::macros::offset!(+07))
+}
+
+pub fn file_name(path: &std::path::Path) -> Option<String> {
+    path.file_stem()
+        .map(std::ffi::OsStr::to_string_lossy)
+        .as_ref()
+        .map(std::borrow::Cow::to_string)
 }
