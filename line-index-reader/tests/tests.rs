@@ -12,7 +12,7 @@ use line_index_reader::LineIndexReader;
 #[case::small_with_eof(small_file_eol(), SMALL_FILE_LINES)]
 #[case::large(large_with_eof(), LARGE_FILE_LINES)]
 #[tokio::test]
-pub async fn index(#[case] file: NamedTempFile, #[case] expected_len: usize) {
+pub async fn index(#[case] file: NamedTempFile, #[case] expected_len: u32) {
     let index = LineIndexReader::index(&file).await.expect("LineIndex");
 
     assert_eq!(index.len(), expected_len);
@@ -26,34 +26,33 @@ pub async fn index(#[case] file: NamedTempFile, #[case] expected_len: usize) {
 #[case::last_plus_one(SMALL_FILE_LINES + 1, None)]
 #[case::beyond_eof(SMALL_FILE_LINES + 10, None)]
 #[tokio::test]
-pub async fn read_single_line(#[case] line: usize, #[case] expected: Option<&'static str>) {
+pub async fn read_single_line(#[case] line: u32, #[case] expected: Option<&'static str>) {
     let file = small_file();
     let index = LineIndexReader::index(&file).await.expect("LineIndex");
 
-    assert_eq!(expected, index.get_line(line).await.as_deref());
+    assert_eq!(expected, index.line(line).await.as_deref());
 }
 
 #[rstest::rstest]
 #[case::from_start(..10, 11 * 10)]
 #[case::beginning(0..10, 11 * 10)]
 #[case::middle(SMALL_FILE_LINES / 3..SMALL_FILE_LINES / 2, 11 * 1_594)]
-#[case::end(SMALL_FILE_LINES - 10..SMALL_FILE_LINES, 11 * 9)]
-#[case::eof(SMALL_FILE_LINES - 10.., 11 * 9)]
+#[case::end(SMALL_FILE_LINES - 10..SMALL_FILE_LINES, 11 * 10)]
+#[case::eof(SMALL_FILE_LINES - 10.., 11 * 10)]
 #[case::beyond_eof(SMALL_FILE_LINES.., 0)]
+#[case::all(.., 11 * SMALL_FILE_LINES as usize)]
 #[tokio::test]
 pub async fn read_many_lines<R>(#[case] lines: R, #[case] expected_size: usize)
 where
-    R: RangeBounds<usize> + Send,
+    R: RangeBounds<u32> + Send,
 {
     let file = small_file_eol();
     let index = LineIndexReader::index(&file).await.expect("LineIndex");
-    let lines = index.get_lines(lines).await;
+    let lines = index.lines(lines).await;
 
     assert_eq!(
-        expected_size,
-        lines
-            .map(|v| v.iter().map(String::len).sum())
-            .unwrap_or_default()
+        lines.iter().map(AsRef::as_ref).map(str::len).sum::<usize>(),
+        expected_size
     );
 }
 
@@ -62,10 +61,10 @@ where
 #[case::one_line(1)]
 #[case::many_lines(9)]
 #[tokio::test]
-pub async fn update(#[case] new_lines: usize) {
+pub async fn update(#[case] new_lines: u32) {
     let mut file = one_line();
 
-    let mut index = LineIndexReader::index(&file).await.expect("LineIndex");
+    let index = LineIndexReader::index(&file).await.expect("LineIndex");
     assert_eq!(1, index.len());
 
     {
@@ -133,11 +132,11 @@ pub async fn consistency_on_appended() {
 }
 
 // 11 bytes per line, so under 100K lines
-const SMALL_FILE_LINES: usize = 9_565;
+const SMALL_FILE_LINES: u32 = 9_565;
 // 11 bytes per line, so over 100K lines
-const LARGE_FILE_LINES: usize = 123_456;
+const LARGE_FILE_LINES: u32 = 123_456;
 
-fn temp_file(lines: usize) -> NamedTempFile {
+fn temp_file(lines: u32) -> NamedTempFile {
     let mut f = NamedTempFile::new().unwrap();
     for i in 0..lines {
         writeln!(f, "Line {i:06}").unwrap();

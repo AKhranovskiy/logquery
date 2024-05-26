@@ -1,5 +1,5 @@
 [workspace]
-members = ["line-index-reader", "monitor", "tui"]
+members = ["line-cache", "line-index-reader", "monitor", "tui"]
 resolver = "2"
 
 [workspace.package]
@@ -40,6 +40,9 @@ thiserror = "1.0.61"
 color-eyre = "0.6.3"
 tap = "1.0.1"
 rstest = "0.19.0"
+mini-moka = "0.10.3"
+tracing-subscriber = "0.3.16"
 
 monitor = { path = "./monitor" }
 line-index-reader = { path = "./line-index-reader" }
+line-cache = { path = "./line-cache" }

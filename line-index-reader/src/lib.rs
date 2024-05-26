@@ -2,31 +2,23 @@ use std::{
     io::{BufRead, Seek, SeekFrom},
     ops::{Bound, RangeBounds},
     path::{Path, PathBuf},
+    sync::RwLock,
 };
 
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt, BufReader},
-    spawn,
-    sync::{mpsc, oneshot},
     task::spawn_blocking,
 };
 
 const READ_BUF_CAPACITY: usize = 8_192;
 
-type LineRequest = (
-    // Offset in the file, in bytes
-    u64,
-    // Limit reading in bytes. If `None`, read until the end of the file.
-    Option<usize>,
-    // Sender for the response
-    oneshot::Sender<Result<Box<[String]>, Error>>,
-);
+pub type Line = Box<str>;
+pub type Lines = Box<[Line]>;
 
 pub struct LineIndexReader {
     path: PathBuf,
-    offsets: Vec<u64>,
-    tx: mpsc::Sender<LineRequest>,
+    offsets: RwLock<Vec<u64>>,
 }
 
 /// Common interface
@@ -36,28 +28,22 @@ impl LineIndexReader {
         P: AsRef<Path> + Clone + Send,
     {
         let file = File::open(path.clone()).await?;
-        let (file, offsets) = spawn_blocking(move || index_lines(file)).await.unwrap()?;
-
-        let (tx, mut rx) = mpsc::channel::<LineRequest>(10);
-
-        spawn(async move {
-            let mut reader = BufReader::new(file);
-            while let Some((offset, limit, resp)) = rx.recv().await {
-                let result = read_lines(&mut reader, offset, limit).await;
-                let _ = resp.send(result);
-            }
-        });
+        let offsets = spawn_blocking(move || index_lines(file)).await.unwrap()?;
 
         Ok(Self {
             path: path.as_ref().to_owned(),
-            offsets,
-            tx,
+            offsets: RwLock::new(offsets),
         })
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.offsets.len()
+    pub fn len(&self) -> u32 {
+        self.offsets
+            .read()
+            .unwrap()
+            .len()
+            .try_into()
+            .unwrap_or(u32::MAX)
     }
 
     #[must_use]
@@ -66,60 +52,82 @@ impl LineIndexReader {
     }
 
     #[must_use]
-    pub async fn get_line(&self, line: usize) -> Option<String> {
-        self.get_lines(line..=line)
-            .await
-            .and_then(|v| v.first().cloned())
+    pub async fn line(&self, line: u32) -> Option<Line> {
+        self.lines(line..=line).await.first().cloned()
     }
 
     #[must_use]
-    pub async fn get_lines<R>(&self, range: R) -> Option<Box<[String]>>
+    pub async fn lines<R>(&self, range: R) -> Lines
     where
-        R: RangeBounds<usize> + Send,
+        R: RangeBounds<u32> + Send,
     {
         let offset = {
-            let start = match range.start_bound() {
-                Bound::Included(x) => *x,
-                Bound::Excluded(x) => *x + 1,
+            let start = match range.start_bound().cloned() {
+                Bound::Included(x) => x,
+                Bound::Excluded(x) => x + 1,
                 Bound::Unbounded => 0,
+            } as usize;
+
+            let Some(&v) = self.offsets.read().unwrap().get(start) else {
+                return Lines::default();
             };
-            self.offsets.get(start).copied()?
+
+            v
         };
 
-        let end = match range.end_bound() {
-            Bound::Included(x) => Some(*x + 1),
-            Bound::Excluded(x) => Some(*x),
-            Bound::Unbounded => None,
-        };
+        let end = match range.end_bound().cloned() {
+            Bound::Included(x) => x + 1,
+            Bound::Excluded(x) => x,
+            Bound::Unbounded => u32::MAX,
+        } as usize;
 
-        let limit = end
-            .and_then(|end| self.offsets.get(end))
-            .or_else(|| self.offsets.last())
+        let limit = self
+            .offsets
+            .read()
+            .unwrap()
+            .get(end)
             .and_then(|v| v.checked_sub(offset))
             .and_then(|v| usize::try_from(v).ok());
 
-        let (tx, rx) = oneshot::channel();
-        self.tx.send((offset, limit, tx)).await.ok()?;
+        tracing::debug!("Reading lines {}:{offset}:{limit:?}", self.path.display());
 
-        rx.await.ok()?.ok()
+        let Ok(file) = File::open(&self.path).await else {
+            tracing::error!("Failed to read file {}", self.path.display());
+            return Lines::default();
+        };
+
+        read_lines(file, offset, limit).await.unwrap_or_default()
     }
 
-    pub async fn update(&mut self) -> Result<usize, Error> {
+    pub async fn update(&self) -> Result<u32, Error> {
         if let Ok(index) = self.consistency().await?.into_inconsistent() {
             return Err(Error::InconsistentIndex(index));
         }
 
-        let old_len = self.offsets.len();
-        let offset = self.offsets.last().copied().unwrap_or_default();
+        let old_len = self.offsets.read().unwrap().len();
+        let offset = self
+            .offsets
+            .read()
+            .unwrap()
+            .last()
+            .copied()
+            .unwrap_or_default();
 
         let mut file = File::open(&self.path).await?;
         let pos = file.seek(SeekFrom::Start(offset)).await?;
         assert_eq!(pos, offset);
 
-        let (_, offsets) = spawn_blocking(move || index_lines(file)).await.unwrap()?;
-        self.offsets.extend(&offsets[1..]);
+        let offsets = spawn_blocking(move || index_lines(file)).await.unwrap()?;
+        self.offsets.write().unwrap().extend(&offsets[1..]);
 
-        Ok(self.offsets.len() - old_len)
+        Ok(self
+            .offsets
+            .read()
+            .unwrap()
+            .len()
+            .checked_sub(old_len)
+            .map(|v| v.try_into().unwrap_or(u32::MAX))
+            .unwrap_or_default())
     }
 
     /// Verifies that the index is consistent with the file.
@@ -128,7 +136,9 @@ impl LineIndexReader {
         let mut file = File::open(&self.path).await?;
         let file_len = file.metadata().await?.len();
 
-        for (index, &offset) in self.offsets.iter().enumerate().skip(1) {
+        let offsets = self.offsets.read().unwrap().clone();
+
+        for (index, &offset) in offsets.iter().enumerate().skip(1) {
             assert!(offset > 0);
             let offset = offset - 1;
 
@@ -159,11 +169,8 @@ pub enum IndexConsistency {
     Inconsistent(usize),
 }
 
-async fn read_lines(
-    reader: &mut BufReader<File>,
-    offset: u64,
-    limit: Option<usize>,
-) -> Result<Box<[String]>, Error> {
+async fn read_lines(file: File, offset: u64, limit: Option<usize>) -> Result<Lines, Error> {
+    let mut reader = BufReader::new(file);
     let pos = reader.seek(SeekFrom::Start(offset)).await?;
     assert_eq!(pos, offset);
 
@@ -181,12 +188,13 @@ async fn read_lines(
     // Reading from the mem buf, no need for async.
     std::io::BufReader::new(std::io::Cursor::new(buf))
         .lines()
+        .map(|line| line.map(Into::into))
         .collect::<Result<Vec<_>, _>>()
         .map(Vec::into_boxed_slice)
         .map_err(Into::into)
 }
 
-fn index_lines(file: File) -> Result<(File, Vec<u64>), Error> {
+fn index_lines(file: File) -> Result<Vec<u64>, Error> {
     let mut file = file.try_into_std().unwrap();
 
     let mut offsets = vec![];
@@ -214,9 +222,7 @@ fn index_lines(file: File) -> Result<(File, Vec<u64>), Error> {
         assert_eq!(reader.stream_position()?, offset);
     }
 
-    file.rewind().unwrap();
-
-    Ok((File::from_std(file), offsets))
+    Ok(offsets)
 }
 
 #[derive(Debug, thiserror::Error)]
