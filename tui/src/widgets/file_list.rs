@@ -16,9 +16,11 @@ use ratatui::{
 use time::macros::format_description;
 
 use crate::{
-    repository::FileInfo,
+    repository::{FileInfo, RepoList},
     utils::{self, centered_rect},
 };
+
+use super::KeyEventHandler;
 
 const WIDTHS: [Constraint; 4] = [
     Constraint::Fill(1),    // File name
@@ -36,7 +38,7 @@ const LAST_UPDATE_FORMAT: &[time::format_description::BorrowedFormatItem<'_>] =
 #[derive(Debug, Clone, Copy)]
 pub struct FileList {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct FileListState {
     hash: u64,
     sorted_list: Vec<FileInfo>,
@@ -45,46 +47,13 @@ pub struct FileListState {
     table_state: TableState,
 }
 
-#[allow(dead_code)]
-#[derive(Debug)]
-pub enum FileListAction {
-    None,
-    /// Open in the new tab
-    OpenNewTab(FileInfo),
-    /// Try to split the current tab, otherwise open in the new tab.
-    SplitCurrentTab(FileInfo),
-    /// Try to merge into the current tab, otherwise open in the new tab
-    MergeIntoCurrentTab(FileInfo),
-}
+impl KeyEventHandler for FileListState {
+    type Action = FileInfo;
 
-impl FileListState {
-    pub fn new() -> Self {
-        let hash = {
-            let mut h = DefaultHasher::new();
-            Vec::<FileInfo>::new().hash(&mut h);
-            h.finish()
-        };
-
-        Self {
-            hash,
-            sorted_list: Vec::new(),
-            sort_column: SortColumn::Name,
-            sort_direction: SortDirection::Ascending,
-            table_state: TableState::default(),
-        }
-    }
-
-    pub fn handle_key_event(&mut self, event: &KeyEvent) -> FileListAction {
-        // Actions for selected file
+    fn handle_key_event(&mut self, event: &KeyEvent) -> Option<Self::Action> {
         if let Some(selected) = self.selected() {
             if (KeyEventKind::Press, KeyCode::Enter) == (event.kind, event.code) {
-                return FileListAction::OpenNewTab(selected);
-                // Modifiers do not work here
-                // return match event.modifiers {
-                //     KeyModifiers::SHIFT => FileListAction::SplitCurrentTab(selected),
-                //     KeyModifiers::CONTROL => FileListAction::MergeIntoCurrentTab(selected),
-                //     _ => FileListAction::OpenNewTab(selected),
-                // };
+                return selected.into();
             }
         }
 
@@ -131,28 +100,35 @@ impl FileListState {
             _ => {}
         }
 
-        FileListAction::None
+        None
     }
+}
 
-    pub fn update(&mut self, files: Vec<FileInfo>) {
+impl FileListState {
+    pub fn update(&mut self, repo: &impl RepoList) {
+        let files = repo.list();
+
         let hash = {
             let mut h = DefaultHasher::new();
             files.hash(&mut h);
             h.finish()
         };
-        if self.hash != hash {
-            self.sorted_list = sort(files, self.sort_column, self.sort_direction);
 
-            if self.sorted_list.is_empty() {
-                self.table_state.select(None);
-            } else {
-                self.table_state.select(
-                    self.table_state
-                        .selected()
-                        .map(|v| v.min(self.sorted_list.len() - 1))
-                        .or(Some(0)),
-                );
-            }
+        if self.hash == hash {
+            return;
+        }
+
+        self.sorted_list = sort(files, self.sort_column, self.sort_direction);
+
+        if self.sorted_list.is_empty() {
+            self.table_state.select(None);
+        } else {
+            self.table_state.select(
+                self.table_state
+                    .selected()
+                    .map(|v| v.min(self.sorted_list.len() - 1))
+                    .or(Some(0)),
+            );
         }
     }
 
@@ -230,15 +206,17 @@ impl StatefulWidget for FileList {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum SortColumn {
     Age,
     LineCount,
+    #[default]
     Name,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum SortDirection {
+    #[default]
     Ascending,
     Descending,
 }

@@ -1,13 +1,8 @@
 use std::{io::Stdout, path::Path};
 
 use crossterm::event::{self, KeyCode, KeyEventKind};
-use ratatui::widgets::Paragraph;
 
-use crate::{
-    repository::Repository,
-    utils::centered_rect,
-    widgets::{FileList, FileListAction, FileListState},
-};
+use crate::{active_widget::ActiveWidget, repository::Repository, widgets::KeyEventHandler};
 
 type Terminal = ratatui::Terminal<ratatui::backend::CrosstermBackend<Stdout>>;
 
@@ -38,27 +33,6 @@ impl App {
     }
 }
 
-#[derive(Debug, Clone, enum_as_inner::EnumAsInner)]
-enum ActiveWidget {
-    FileList(FileListState),
-    Test(String),
-}
-
-impl ActiveWidget {
-    fn draw(&mut self, frame: &mut ratatui::Frame) {
-        if let Self::FileList(ref mut state) = self {
-            frame.render_stateful_widget(FileList {}, frame.size(), state);
-        } else if let Self::Test(ref text) = self {
-            frame.render_widget(
-                Paragraph::new(vec![
-                    text.as_str().into(),
-                    "Press 'o' to open the file browser".into(),
-                ]),
-                centered_rect(frame.size(), 30, 10),
-            );
-        }
-    }
-}
 struct AppState {
     quit: bool,
     active_widget: ActiveWidget,
@@ -69,8 +43,8 @@ impl AppState {
     fn new(target_dir: &Path) -> Self {
         Self {
             quit: false,
-            active_widget: ActiveWidget::FileList(FileListState::new()),
-            repo: Repository::new(target_dir),
+            active_widget: ActiveWidget::default(),
+            repo: Repository::new(target_dir.to_owned()),
         }
     }
 
@@ -78,29 +52,21 @@ impl AppState {
         if (key.kind, key.code) == (KeyEventKind::Press, KeyCode::Char('q')) {
             self.quit = true;
         } else if let ActiveWidget::FileList(ref mut state) = &mut self.active_widget {
-            match state.handle_key_event(key) {
-                FileListAction::None => {}
-                FileListAction::OpenNewTab(info) => {
-                    self.active_widget =
-                        ActiveWidget::Test(format!("Open in the new tab: {}", info.name));
-                }
-                FileListAction::SplitCurrentTab(info) => {
-                    self.active_widget =
-                        ActiveWidget::Test(format!("Split the current tab: {}", info.name));
-                }
-                FileListAction::MergeIntoCurrentTab(info) => {
-                    self.active_widget =
-                        ActiveWidget::Test(format!("Merge into the current tab: {}", info.name));
-                }
+            if let Some(info) = state.handle_key_event(key) {
+                self.active_widget = ActiveWidget::file_view(info);
             }
         } else if (key.kind, key.code) == (KeyEventKind::Press, KeyCode::Char('o')) {
-            self.active_widget = ActiveWidget::FileList(FileListState::new());
+            self.active_widget = ActiveWidget::file_list();
+        } else if let ActiveWidget::FileView(ref mut state) = &mut self.active_widget {
+            state.handle_key_event(key);
         }
     }
 
     fn update(&mut self) {
         if let ActiveWidget::FileList(ref mut state) = &mut self.active_widget {
-            state.update(self.repo.list());
+            state.update(&self.repo);
+        } else if let ActiveWidget::FileView(ref mut state) = &mut self.active_widget {
+            state.update(&self.repo);
         }
     }
 }

@@ -13,8 +13,11 @@ itertools = { workspace = true }
 ratatui = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 # Workspace crates
+line-cache = { workspace = true }
 line-index-reader = { workspace = true }
 monitor = { workspace = true }
 

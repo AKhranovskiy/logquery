@@ -61,6 +61,10 @@ impl Monitor {
     pub fn try_next_message(&mut self) -> Option<Event> {
         self.events.try_recv().ok()
     }
+
+    pub async fn next_message(&mut self) -> Option<Event> {
+        self.events.recv().await
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]

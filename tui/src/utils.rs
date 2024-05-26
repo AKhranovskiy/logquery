@@ -30,7 +30,8 @@ pub fn now() -> time::OffsetDateTime {
 }
 
 pub fn file_name(path: &std::path::Path) -> Option<String> {
-    path.file_stem()
+    path.iter()
+        .last()
         .map(std::ffi::OsStr::to_string_lossy)
         .as_ref()
         .map(std::borrow::Cow::to_string)

@@ -10,7 +10,9 @@ use crossterm::{
     ExecutableCommand,
 };
 use ratatui::prelude::{CrosstermBackend, Terminal};
+use tracing_subscriber::util::SubscriberInitExt;
 
+mod active_widget;
 mod app;
 mod repository;
 mod utils;
@@ -23,6 +25,13 @@ fn main() -> Result<()> {
         print_usage();
         return Ok(());
     };
+
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_max_level(tracing::Level::DEBUG)
+        .compact()
+        .finish()
+        .init();
 
     with_terminal(|terminal| App::run(terminal, &target_dir))
 }
