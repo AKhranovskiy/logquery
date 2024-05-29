@@ -1,7 +1,7 @@
 use std::default;
 
 use crate::{
-    repository::FileInfo,
+    repository::{FileInfo, RepoLines, RepoList},
     widgets::{FileList, FileListState, FileView, FileViewState},
 };
 
@@ -23,6 +23,17 @@ impl ActiveWidget {
             frame.render_stateful_widget(FileList {}, frame.size(), state);
         } else if let Self::FileView(ref mut state) = self {
             frame.render_stateful_widget(FileView {}, frame.size(), state);
+        }
+    }
+
+    pub fn update(&mut self, list: &impl RepoList, lines: &impl RepoLines) {
+        match self {
+            Self::FileList(ref mut state) => {
+                state.update(list);
+            }
+            Self::FileView(ref mut state) => {
+                state.update(lines);
+            }
         }
     }
 

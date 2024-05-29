@@ -16,7 +16,9 @@ impl App {
             terminal.draw(|f| {
                 state.active_widget.draw(f);
             })?;
+
             Self::handle_key_events(&mut state)?;
+
             state.update();
         }
 
@@ -33,10 +35,10 @@ impl App {
     }
 }
 
-struct AppState {
+pub struct AppState {
     quit: bool,
     active_widget: ActiveWidget,
-    repo: Repository,
+    pub repo: Repository,
 }
 
 impl AppState {
@@ -63,10 +65,6 @@ impl AppState {
     }
 
     fn update(&mut self) {
-        if let ActiveWidget::FileList(ref mut state) = &mut self.active_widget {
-            state.update(&self.repo);
-        } else if let ActiveWidget::FileView(ref mut state) = &mut self.active_widget {
-            state.update(&self.repo);
-        }
+        self.active_widget.update(&self.repo, &self.repo);
     }
 }
