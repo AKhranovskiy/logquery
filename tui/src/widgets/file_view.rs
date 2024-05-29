@@ -1,11 +1,9 @@
-use core::num;
 use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
 use itertools::Itertools;
 use ratatui::{
     prelude::*,
-    symbols::{line::BOTTOM_RIGHT, scrollbar},
     widgets::{
         Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
     },
