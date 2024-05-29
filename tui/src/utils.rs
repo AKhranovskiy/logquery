@@ -1,3 +1,4 @@
+use crossterm::event::{self, KeyCode, KeyEventKind};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 /// # Usage
@@ -35,4 +36,14 @@ pub fn file_name(path: &std::path::Path) -> Option<String> {
         .map(std::ffi::OsStr::to_string_lossy)
         .as_ref()
         .map(std::borrow::Cow::to_string)
+}
+
+pub trait KeyEventExt {
+    fn has_pressed(&self, c: char) -> bool;
+}
+
+impl KeyEventExt for event::KeyEvent {
+    fn has_pressed(&self, c: char) -> bool {
+        (self.kind, self.code) == (KeyEventKind::Press, KeyCode::Char(c))
+    }
 }

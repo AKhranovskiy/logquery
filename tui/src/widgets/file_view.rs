@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use itertools::Itertools;
 use ratatui::{
     prelude::*,
@@ -54,7 +54,7 @@ impl FileViewState {
 impl KeyEventHandler for FileViewState {
     type Action = ();
 
-    fn handle_key_event(&mut self, event: &crossterm::event::KeyEvent) -> Option<Self::Action> {
+    fn handle_key_event(&mut self, event: &KeyEvent) -> Option<Self::Action> {
         let with_shift = event.modifiers.contains(KeyModifiers::SHIFT);
 
         match (event.kind, event.code) {

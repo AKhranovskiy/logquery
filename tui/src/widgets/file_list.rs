@@ -90,11 +90,11 @@ impl KeyEventHandler for FileListState {
                     .select(self.table_state.selected().map(|v| v.saturating_sub(1)));
             }
             (KeyEventKind::Press, KeyCode::Down) => {
-                self.table_state.select(
-                    self.table_state
-                        .selected()
-                        .map(|v| v.saturating_add(1).min(self.sorted_list.len() - 1)),
-                );
+                self.table_state
+                    .select(self.table_state.selected().map(|v| {
+                        v.saturating_add(1)
+                            .min(self.sorted_list.len().saturating_sub(1))
+                    }));
             }
 
             _ => {}
@@ -118,18 +118,18 @@ impl FileListState {
             return;
         }
 
+        let index = self
+            .table_state
+            .selected()
+            .and_then(|s| self.sorted_list.get(s))
+            .map(|info| info.name.clone());
+
         self.sorted_list = sort(files, self.sort_column, self.sort_direction);
 
-        if self.sorted_list.is_empty() {
-            self.table_state.select(None);
-        } else {
-            self.table_state.select(
-                self.table_state
-                    .selected()
-                    .map(|v| v.min(self.sorted_list.len() - 1))
-                    .or(Some(0)),
-            );
-        }
+        let index =
+            index.and_then(|name| self.sorted_list.iter().position(|info| info.name == name));
+
+        self.table_state.select(index.or(Some(0)));
     }
 
     fn selected(&self) -> Option<FileInfo> {

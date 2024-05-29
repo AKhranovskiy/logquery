@@ -1,8 +1,10 @@
 use std::default;
 
+use crossterm::event;
+
 use crate::{
-    repository::{FileInfo, RepoLines, RepoList},
-    widgets::{FileList, FileListState, FileView, FileViewState},
+    repository::FileInfo,
+    widgets::{FileList, FileListState, FileView, FileViewState, KeyEventHandler},
 };
 
 #[derive(enum_as_inner::EnumAsInner)]
@@ -25,14 +27,13 @@ impl ActiveWidget {
             frame.render_stateful_widget(FileView {}, frame.size(), state);
         }
     }
-
-    pub fn update(&mut self, list: &impl RepoList, lines: &impl RepoLines) {
+    // todo wrap result into enum
+    pub fn handle_key_event(&mut self, event: &event::KeyEvent) -> Option<FileInfo> {
         match self {
-            Self::FileList(ref mut state) => {
-                state.update(list);
-            }
-            Self::FileView(ref mut state) => {
-                state.update(lines);
+            Self::FileList(state) => state.handle_key_event(event),
+            Self::FileView(state) => {
+                state.handle_key_event(event);
+                None
             }
         }
     }

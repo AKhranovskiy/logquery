@@ -1,8 +1,8 @@
 use std::{io::Stdout, path::Path};
 
-use crossterm::event::{self, KeyCode, KeyEventKind};
+use crossterm::event::{self};
 
-use crate::{active_widget::ActiveWidget, repository::Repository, widgets::KeyEventHandler};
+use crate::{active_widget::ActiveWidget, repository::Repository, utils::KeyEventExt};
 
 type Terminal = ratatui::Terminal<ratatui::backend::CrosstermBackend<Stdout>>;
 
@@ -14,7 +14,7 @@ impl App {
 
         while !state.quit {
             terminal.draw(|f| {
-                state.active_widget.draw(f);
+                state.draw(f);
             })?;
 
             Self::handle_key_events(&mut state)?;
@@ -38,7 +38,7 @@ impl App {
 pub struct AppState {
     quit: bool,
     active_widget: ActiveWidget,
-    pub repo: Repository,
+    repo: Repository,
 }
 
 impl AppState {
@@ -50,21 +50,28 @@ impl AppState {
         }
     }
 
-    fn handle_key_event(&mut self, key: &event::KeyEvent) {
-        if (key.kind, key.code) == (KeyEventKind::Press, KeyCode::Char('q')) {
+    fn draw(&mut self, frame: &mut ratatui::Frame) {
+        self.active_widget.draw(frame);
+    }
+
+    fn handle_key_event(&mut self, event: &event::KeyEvent) {
+        if event.has_pressed('q') {
             self.quit = true;
-        } else if let ActiveWidget::FileList(ref mut state) = &mut self.active_widget {
-            if let Some(info) = state.handle_key_event(key) {
-                self.active_widget = ActiveWidget::file_view(info);
-            }
-        } else if (key.kind, key.code) == (KeyEventKind::Press, KeyCode::Char('o')) {
+        } else if event.has_pressed('o') && !self.active_widget.is_file_list() {
             self.active_widget = ActiveWidget::file_list();
-        } else if let ActiveWidget::FileView(ref mut state) = &mut self.active_widget {
-            state.handle_key_event(key);
+        } else if let Some(info) = self.active_widget.handle_key_event(event) {
+            self.active_widget = ActiveWidget::file_view(info);
         }
     }
 
     fn update(&mut self) {
-        self.active_widget.update(&self.repo, &self.repo);
+        match self.active_widget {
+            ActiveWidget::FileList(ref mut state) => {
+                state.update(&self.repo);
+            }
+            ActiveWidget::FileView(ref mut state) => {
+                state.update(&self.repo);
+            }
+        }
     }
 }
