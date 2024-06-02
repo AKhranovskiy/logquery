@@ -20,6 +20,7 @@ struct FileState {
     number_column_width: u16,
     scroll_offset: u32,
     display_lines: Box<[Arc<str>]>,
+    stick_to_bottom: bool,
 }
 
 impl From<FileInfo> for FileState {
@@ -36,6 +37,7 @@ impl From<FileInfo> for FileState {
                 + 3,
             scroll_offset: 0,
             display_lines: Box::default(),
+            stick_to_bottom: false,
         }
     }
 }
@@ -62,6 +64,7 @@ impl KeyEventHandler for FileViewState {
                 } else {
                     active.scroll_offset.saturating_sub(1)
                 };
+                active.stick_to_bottom = false;
             }
             (KeyEventKind::Press, KeyCode::Down) => {
                 active.scroll_offset = if with_shift {
@@ -70,15 +73,21 @@ impl KeyEventHandler for FileViewState {
                     active.scroll_offset.saturating_add(1)
                 }
                 .min(active.total_lines.saturating_sub(self.height));
+                active.stick_to_bottom = false;
             }
             (KeyEventKind::Press, KeyCode::PageUp) => {
                 active.scroll_offset = active.scroll_offset.saturating_sub(self.height);
+                active.stick_to_bottom = false;
             }
             (KeyEventKind::Press, KeyCode::PageDown) => {
                 active.scroll_offset = active
                     .scroll_offset
                     .saturating_add(self.height)
                     .min(active.total_lines.saturating_sub(self.height));
+                active.stick_to_bottom = false;
+            }
+            (KeyEventKind::Press, KeyCode::Char('B')) => {
+                active.stick_to_bottom = true;
             }
             _ => {}
         }
@@ -112,6 +121,10 @@ impl FileViewState {
                 state.scroll_offset,
                 (state.scroll_offset + self.height).min(state.total_lines),
             );
+
+            if state.stick_to_bottom {
+                state.scroll_offset = state.total_lines.saturating_sub(self.height);
+            }
         }
     }
 }
