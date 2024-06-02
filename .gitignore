@@ -1,4 +1,5 @@
-/target
+/.idea/
+/.docker/
+/target/
 Cargo.lock
-/.idea
 error.log

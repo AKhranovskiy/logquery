@@ -12,7 +12,6 @@ use crossterm::{
 use ratatui::prelude::{CrosstermBackend, Terminal};
 use tracing_subscriber::util::SubscriberInitExt;
 
-mod active_widget;
 mod app;
 mod repository;
 mod utils;

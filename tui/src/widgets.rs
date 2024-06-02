@@ -1,4 +1,5 @@
 mod file_list;
+mod file_tabs;
 mod file_view;
 mod state;
 

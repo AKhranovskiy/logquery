@@ -7,17 +7,19 @@ use std::{
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use itertools::Itertools;
 use ratatui::{
-    layout::Constraint,
+    layout::{Constraint, Margin},
     prelude::{Buffer, Rect},
     style::{Style, Stylize},
     text::{Line, Text},
-    widgets::{Block, Borders, HighlightSpacing, Row, StatefulWidget, Table, TableState},
+    widgets::{
+        Block, Borders, Clear, HighlightSpacing, Row, StatefulWidget, Table, TableState, Widget,
+    },
 };
 use time::macros::format_description;
 
 use crate::{
     repository::{FileInfo, RepoList},
-    utils::{self, centered_rect},
+    utils::{self, RectExt},
 };
 
 use super::KeyEventHandler;
@@ -90,11 +92,11 @@ impl KeyEventHandler for FileListState {
                     .select(self.table_state.selected().map(|v| v.saturating_sub(1)));
             }
             (KeyEventKind::Press, KeyCode::Down) => {
-                self.table_state.select(
-                    self.table_state
-                        .selected()
-                        .map(|v| v.saturating_add(1).min(self.sorted_list.len() - 1)),
-                );
+                self.table_state
+                    .select(self.table_state.selected().map(|v| {
+                        v.saturating_add(1)
+                            .min(self.sorted_list.len().saturating_sub(1))
+                    }));
             }
 
             _ => {}
@@ -118,18 +120,18 @@ impl FileListState {
             return;
         }
 
+        let index = self
+            .table_state
+            .selected()
+            .and_then(|s| self.sorted_list.get(s))
+            .map(|info| info.name.clone());
+
         self.sorted_list = sort(files, self.sort_column, self.sort_direction);
 
-        if self.sorted_list.is_empty() {
-            self.table_state.select(None);
-        } else {
-            self.table_state.select(
-                self.table_state
-                    .selected()
-                    .map(|v| v.min(self.sorted_list.len() - 1))
-                    .or(Some(0)),
-            );
-        }
+        let index =
+            index.and_then(|name| self.sorted_list.iter().position(|info| info.name == name));
+
+        self.table_state.select(index.or(Some(0)));
     }
 
     fn selected(&self) -> Option<FileInfo> {
@@ -192,8 +194,6 @@ impl StatefulWidget for FileList {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let renderer = Renderer(state);
 
-        let area = centered_rect(area, 60, 80);
-
         let table = Table::new(renderer.rows(), WIDTHS)
             .block(Block::default().title(TITLE).borders(Borders::ALL))
             .header(renderer.header())
@@ -201,7 +201,17 @@ impl StatefulWidget for FileList {
             .highlight_style(Style::default().bold().yellow().on_blue());
 
         let mut table_state = state.table_state.clone();
-        StatefulWidget::render(table, area, buf, &mut table_state);
+
+        let centered = area.inner_centered(60, 80);
+
+        // Dim the backround.
+        Block::new().dark_gray().render(area, buf);
+
+        // Clear the are for popup.
+        Clear.render(centered.outer(Margin::new(2, 1)).clamp(area), buf);
+
+        StatefulWidget::render(table, centered, buf, &mut table_state);
+
         state.table_state = table_state;
     }
 }

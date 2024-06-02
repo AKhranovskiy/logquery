@@ -76,7 +76,7 @@ impl LineCache {
 
         let len = end - start;
         // TODO pre-fetch lines before range if they are not in cache.
-        let prefetch = range.start..range.end.saturating_add(len * 10);
+        let prefetch = range.start..range.end.saturating_add(len.saturating_mul(10).min(2_048));
 
         tracing::debug!("Fetching {}:{} from file", prefetch.start, prefetch.end);
 

@@ -1,13 +1,12 @@
-use core::num;
 use std::sync::Arc;
 
-use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use itertools::Itertools;
 use ratatui::{
     prelude::*,
-    symbols::{line::BOTTOM_RIGHT, scrollbar},
     widgets::{
         Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
+        Tabs,
     },
 };
 
@@ -15,16 +14,15 @@ use crate::repository::{FileInfo, RepoLines};
 
 use super::KeyEventHandler;
 
-pub struct FileViewState {
-    name: String,
+struct FileState {
+    pub name: String,
     total_lines: u32,
     number_column_width: u16,
     scroll_offset: u32,
-    frame_height: u32,
     display_lines: Box<[Arc<str>]>,
 }
 
-impl From<FileInfo> for FileViewState {
+impl From<FileInfo> for FileState {
     fn from(info: FileInfo) -> Self {
         Self {
             name: info.name,
@@ -37,56 +35,84 @@ impl From<FileInfo> for FileViewState {
                 .unwrap_or(1u16)
                 + 3,
             scroll_offset: 0,
-            frame_height: 0, // will be updated on render
             display_lines: Box::default(),
         }
     }
 }
 
-impl FileViewState {
-    pub fn update(&mut self, repo: &impl RepoLines) {
-        self.display_lines = repo.lines(
-            self.name.as_str(),
-            self.scroll_offset,
-            (self.scroll_offset + self.frame_height).min(self.total_lines),
-        );
-    }
+#[derive(Default)]
+pub struct FileViewState {
+    height: u32,
+    files: Vec<FileState>,
+    active: usize,
 }
 
 impl KeyEventHandler for FileViewState {
     type Action = ();
 
-    fn handle_key_event(&mut self, event: &crossterm::event::KeyEvent) -> Option<Self::Action> {
+    fn handle_key_event(&mut self, event: &KeyEvent) -> Option<Self::Action> {
+        let active = self.files.get_mut(self.active)?;
+
         let with_shift = event.modifiers.contains(KeyModifiers::SHIFT);
 
         match (event.kind, event.code) {
             (KeyEventKind::Press, KeyCode::Up) => {
-                self.scroll_offset = if with_shift {
-                    self.scroll_offset.saturating_sub(self.frame_height)
+                active.scroll_offset = if with_shift {
+                    active.scroll_offset.saturating_sub(self.height)
                 } else {
-                    self.scroll_offset.saturating_sub(1)
+                    active.scroll_offset.saturating_sub(1)
                 };
             }
             (KeyEventKind::Press, KeyCode::Down) => {
-                self.scroll_offset = if with_shift {
-                    self.scroll_offset.saturating_add(self.frame_height)
+                active.scroll_offset = if with_shift {
+                    active.scroll_offset.saturating_add(self.height)
                 } else {
-                    self.scroll_offset.saturating_add(1)
+                    active.scroll_offset.saturating_add(1)
                 }
-                .min(self.total_lines.saturating_sub(self.frame_height));
+                .min(active.total_lines.saturating_sub(self.height));
             }
             (KeyEventKind::Press, KeyCode::PageUp) => {
-                self.scroll_offset = self.scroll_offset.saturating_sub(self.frame_height);
+                active.scroll_offset = active.scroll_offset.saturating_sub(self.height);
             }
             (KeyEventKind::Press, KeyCode::PageDown) => {
-                self.scroll_offset = self
+                active.scroll_offset = active
                     .scroll_offset
-                    .saturating_add(self.frame_height)
-                    .min(self.total_lines.saturating_sub(self.frame_height));
+                    .saturating_add(self.height)
+                    .min(active.total_lines.saturating_sub(self.height));
             }
             _ => {}
         }
+
         None
+    }
+}
+
+impl FileViewState {
+    pub fn push(&mut self, info: FileInfo) {
+        if let Some(pos) = self.files.iter().position(|state| state.name == info.name) {
+            self.active = pos;
+        } else {
+            self.files.push(info.into());
+            self.active = self.files.len() - 1;
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
+
+    // pub fn len(&self) -> usize {
+    //     self.files.len()
+    // }
+
+    pub fn update(&mut self, repo: &impl RepoLines) {
+        if let Some(state) = self.files.get_mut(self.active) {
+            state.display_lines = repo.lines(
+                state.name.as_str(),
+                state.scroll_offset,
+                (state.scroll_offset + self.height).min(state.total_lines),
+            );
+        }
     }
 }
 
@@ -98,38 +124,36 @@ impl StatefulWidget for FileView {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         // Update the visible lines count
-        state.frame_height = area.height.into();
-        state.frame_height = state.frame_height.saturating_sub(2);
+        state.height = area.height.saturating_sub(3).into();
 
-        let layout = FileViewLayout::new(area, state.number_column_width);
+        let frame_height = state.height;
 
-        // Top-left corner
+        let tab_titles = state
+            .files
+            .iter()
+            .map(|state| state.name.clone())
+            .collect_vec();
+
+        let Some(active_state) = state.files.get_mut(state.active) else {
+            return;
+        };
+
+        let layout = FileViewLayout::new(area, active_state.number_column_width);
+
+        // Tabs
         {
-            let block = Block::new()
-                .borders(Borders::TOP)
-                .border_style(Style::default().dark_gray());
-            Widget::render(block, layout.top_left_corner, buf);
-        }
-
-        // Title
-        {
-            // Use custom border set to merge [TopLeftCorner] and [Title] top borders.
-            let border_set = symbols::border::Set {
-                top_left: symbols::line::NORMAL.horizontal_down,
-                ..symbols::border::PLAIN
-            };
-            let block = Block::new()
-                .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-                .border_set(border_set)
-                .border_style(Style::default().dark_gray())
-                .title(Line::from(state.name.as_ref()).bold().yellow());
-
-            Widget::render(block, layout.title, buf);
+            Tabs::new(tab_titles)
+                .highlight_style(Style::default().bold().yellow())
+                .padding("", "")
+                .divider(" ")
+                .select(state.active)
+                .render(layout.tabs, buf);
         }
 
         // Numbers column
         {
-            let line_numbers = ((state.scroll_offset)..(state.scroll_offset + state.frame_height))
+            let line_numbers = ((active_state.scroll_offset)
+                ..(active_state.scroll_offset + frame_height))
                 .map(|i| {
                     Line::from(vec![Span::raw((i + 1).to_string()), Span::raw(" ")])
                         .right_aligned()
@@ -139,15 +163,16 @@ impl StatefulWidget for FileView {
 
             let column = Paragraph::new(line_numbers).block(
                 Block::new()
-                    .borders(Borders::BOTTOM)
+                    .borders(Borders::TOP | Borders::BOTTOM)
                     .border_style(Style::default().dark_gray()),
             );
+
             Widget::render(column, layout.numbers, buf);
         }
 
         // Text area
         {
-            let lines = state
+            let lines = active_state
                 .display_lines
                 .iter()
                 .map(|line| Line::from(line.as_ref()))
@@ -156,12 +181,13 @@ impl StatefulWidget for FileView {
             // Use custom border set to merge [Numbers] and [Text] bottom borders.
             let border_set = symbols::border::Set {
                 bottom_left: symbols::line::NORMAL.horizontal_up,
+                top_left: symbols::line::NORMAL.horizontal_down,
                 ..symbols::border::PLAIN
             };
 
             let par = Paragraph::new(lines).block(
                 Block::new()
-                    .borders(Borders::LEFT | Borders::BOTTOM)
+                    .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
                     .border_style(Style::default().dark_gray())
                     .border_set(border_set),
             );
@@ -169,9 +195,18 @@ impl StatefulWidget for FileView {
             Widget::render(par, layout.text, buf);
         }
 
+        // Top-right corner
+        {
+            let block = Block::new()
+                .borders(Borders::TOP | Borders::RIGHT)
+                .border_style(Style::default().dark_gray());
+
+            Widget::render(block, layout.top_right_corner, buf);
+        }
+
         // Scrollbar
         {
-            if state.total_lines > state.frame_height {
+            if active_state.total_lines > frame_height {
                 let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .begin_symbol(None)
                     .end_symbol(None)
@@ -179,14 +214,15 @@ impl StatefulWidget for FileView {
                     .thumb_symbol("┃");
 
                 let mut scrollbar_state =
-                    ScrollbarState::new(state.total_lines.saturating_sub(state.frame_height) as _)
-                        .position(state.scroll_offset as _);
+                    ScrollbarState::new(active_state.total_lines.saturating_sub(frame_height) as _)
+                        .position(active_state.scroll_offset as _);
 
                 StatefulWidget::render(scrollbar, layout.scrollbar, buf, &mut scrollbar_state);
             } else {
                 let block = Block::new()
                     .borders(Borders::RIGHT)
                     .border_style(Style::default().dark_gray());
+
                 Widget::render(block, layout.scrollbar, buf);
             }
         }
@@ -196,58 +232,63 @@ impl StatefulWidget for FileView {
             let block = Block::new()
                 .borders(Borders::BOTTOM | Borders::RIGHT)
                 .border_style(Style::default().dark_gray());
+
             Widget::render(block, layout.bottom_right_corner, buf);
         }
     }
 }
 
 struct FileViewLayout {
-    top_left_corner: Rect,
-    title: Rect,
+    tabs: Rect,
     numbers: Rect,
     text: Rect,
+    top_right_corner: Rect,
     scrollbar: Rect,
     bottom_right_corner: Rect,
 }
 
 /// Layout of the file view
 ///  ```
-/// [top_left_corner] [title]
-/// [numbers]         [text] [scrollbar]
-///                          [bottom_right_corner]
+/// [          tabs       ]
+/// [numbers][text] [scrollbar]
+///                 [bottom_right_corner]
 /// ```
 impl FileViewLayout {
     fn new(area: Rect, number_column_width: u16) -> Self {
-        let vert = Layout::vertical(vec![Constraint::Length(1), Constraint::Fill(1)]).split(area);
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Fill(1)])
+            .split(area);
 
-        let top_area = Layout::horizontal(vec![
-            Constraint::Length(number_column_width),
-            Constraint::Fill(1),
-        ])
-        .split(vert[0]);
-        let top_left_corner = top_area[0];
-        let title = top_area[1];
+        let tabs = layout[0];
 
-        let main_area = Layout::horizontal(vec![
+        let main = Layout::horizontal(vec![
             Constraint::Length(number_column_width),
             Constraint::Fill(1),
             Constraint::Length(1),
         ])
-        .split(vert[1]);
-        let numbers = main_area[0];
-        let text = main_area[1];
+        .split(layout[1]);
 
-        // Split scrollbar area into two rows because Scrollbar cannot be wrapped with a borderd block.
-        let scrollbar_area =
-            Layout::vertical(vec![Constraint::Fill(1), Constraint::Length(1)]).split(main_area[2]);
-        let scrollbar = scrollbar_area[0];
-        let bottom_right_corner = scrollbar_area[1];
+        let numbers = main[0];
+        let text = main[1];
+
+        // Split scrollbar area into 3 rows because Scrollbar cannot be wrapped with a borderd block.
+        let scrollbar_area = Layout::vertical(vec![
+            Constraint::Length(1),
+            Constraint::Fill(1),
+            Constraint::Length(1),
+        ])
+        .split(main[2]);
+
+        let top_right_corner = scrollbar_area[0];
+        let scrollbar = scrollbar_area[1];
+        let bottom_right_corner = scrollbar_area[2];
 
         Self {
-            top_left_corner,
-            title,
+            tabs,
             numbers,
             text,
+            top_right_corner,
             scrollbar,
             bottom_right_corner,
         }
