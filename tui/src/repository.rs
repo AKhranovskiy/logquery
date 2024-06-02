@@ -126,6 +126,7 @@ impl RepoList for Repository {
 
 pub trait RepoLines {
     fn lines(&self, name: &str, from: u32, to: u32) -> Box<[Arc<str>]>;
+    fn total(&self, name: &str) -> u32;
 }
 
 impl RepoLines for Repository {
@@ -147,6 +148,13 @@ impl RepoLines for Repository {
             .map_while(Clone::clone)
             .collect_vec()
             .into_boxed_slice()
+    }
+
+    fn total(&self, name: &str) -> u32 {
+        self.entries
+            .get(name)
+            .map(|entry| entry.value().reader.len())
+            .unwrap_or_default()
     }
 }
 

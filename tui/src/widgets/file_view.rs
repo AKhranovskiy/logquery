@@ -101,14 +101,14 @@ impl FileViewState {
         self.files.is_empty()
     }
 
-    // pub fn len(&self) -> usize {
-    //     self.files.len()
-    // }
-
     pub fn update(&mut self, repo: &impl RepoLines) {
         if let Some(state) = self.files.get_mut(self.active) {
+            let name = &state.name;
+
+            state.total_lines = repo.total(name);
+
             state.display_lines = repo.lines(
-                state.name.as_str(),
+                name,
                 state.scroll_offset,
                 (state.scroll_offset + self.height).min(state.total_lines),
             );
