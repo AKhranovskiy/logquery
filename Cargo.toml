@@ -33,13 +33,13 @@ time = { version = "0.3.36", features = [
     "formatting",
 ] }
 itertools = "0.13.0"
-tokio = { version = "1.37.0", features = ["full"] }
+tokio = { version = "1.38.0", features = ["full"] }
 dashmap = "5.5.3"
 tracing = "0.1.40"
 thiserror = "1.0.61"
 color-eyre = "0.6.3"
 tap = "1.0.1"
-rstest = "0.19.0"
+rstest = "0.21.0"
 mini-moka = "0.10.3"
 tracing-subscriber = "0.3.18"
 
